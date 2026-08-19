@@ -1,21 +1,31 @@
 import numpy 
 import sounddevice as sd
 import threading
-from config import sampling_rate, dtype, channels, device
+from config import sampling_rate, dtype, channels, device_name, host_api
 
 
 speech = []
 is_recording = False
+_stop_event = threading.Event()
 
-def call_back(indata, frames, time, status): 
+def find_device():
+    """Resolve the configured microphone by name and host API instead of a
+    fixed index, since device indices shift when other audio devices are
+    plugged in or removed."""
+    for index, dev in enumerate(sd.query_devices()):
+        api = sd.query_hostapis(dev["hostapi"])["name"]
+        if device_name in dev["name"] and api == host_api and dev["max_input_channels"]:
+            return index
+    raise RuntimeError(f"No {host_api} input device named {device_name!r}. Is the mic plugged in?")
+
+def call_back(indata, frames, time, status):
     if is_recording:
         chunk = numpy.frombuffer(indata, dtype='float32').copy()
         speech.append(chunk)
 
 def record_audio():
-    with sd.RawInputStream(samplerate=sampling_rate, dtype=dtype, callback=call_back, channels=channels, device=device):
-        while is_recording:
-            pass
+    with sd.RawInputStream(samplerate=sampling_rate, dtype=dtype, callback=call_back, channels=channels, device=find_device()):
+        _stop_event.wait()
 
 def start_audio_process():
     thread1 = threading.Thread(target=record_audio)
@@ -29,10 +39,12 @@ def start_recording():
     global is_recording
     speech.clear()
     is_recording = True
+    _stop_event.clear()
 
 def stop_recording():
     global is_recording
     is_recording = False
+    _stop_event.set()
 
 def is_currently_recording():
     return is_recording

@@ -27,13 +27,19 @@ def on_release(key):
         if is_speech_empty():
             return
 
-        audio_array = get_audio()
-        text = convert_audio_to_text(audio_array)
-        print('pasting text')
-        pyperclip.copy(text)
-        with kb.pressed(keyboard.Key.ctrl):
-            kb.press('v')
-            kb.release('v')
+        try:
+            audio_array = get_audio()
+            text = convert_audio_to_text(audio_array)
+            print('pasting text')
+            pyperclip.copy(text)
+            with kb.pressed(keyboard.Key.ctrl):
+                kb.press('v')
+                kb.release('v')
+        except Exception as e:
+            # pynput stops the whole listener if a callback raises, so a single
+            # bad transcription or clipboard failure would otherwise kill the
+            # hotkey forever instead of just that one recording.
+            print(f"Error processing recording: {e}")
         
 def start_listener():
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
